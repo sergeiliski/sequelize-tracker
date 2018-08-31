@@ -2,6 +2,7 @@ Sequelize Tracker
 =============================
 Track changes to your models. See who has looked at or changed the models data and how it was changed.
 
+[![Build Status](https://travis-ci.org/sergeiliski/sequelize-tracker.svg?branch=master)](https://travis-ci.org/sergeiliski/sequelize-tracker)
 
 Installation
 ------------
