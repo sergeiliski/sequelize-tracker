@@ -1,0 +1,31 @@
+{
+  "name": "sequelize-tracker",
+  "version": "1.0.0",
+  "description": "Track your models. Who creates, deletes, views and changes data.",
+  "main": "index.js",
+  "scripts": {
+    "test": "nyc --reporter=html --reporter=text ./node_modules/mocha/bin/mocha",
+    "coverage": "nyc report --reporter=text-lcov | coveralls"
+  },
+  "keywords": [
+    "sequelize",
+    "tracking",
+    "logs"
+  ],
+  "author": "Sergei Liski",
+  "license": "MIT",
+  "dependencies": {
+    "lodash": "^3.10.1"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "coveralls": "^3.0.2",
+    "mocha": "^5.2.0",
+    "nyc": "^13.0.1",
+    "pg": "^7.4.3",
+    "pg-hstore": "^2.3.2",
+    "sequelize": "^4.38.0",
+    "sqlite3": "^4.0.1"
+  }
+}

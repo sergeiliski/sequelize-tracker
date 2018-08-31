@@ -1,0 +1,379 @@
+var Tracker = require('./');
+var _ = require('lodash');
+var Sequelize = require('sequelize');
+var chai = require("chai");
+var chaiAsPromised = require("chai-as-promised");
+chai.use(chaiAsPromised);
+var assert = chai.assert;
+var eventually = assert.eventually;
+
+function initDB(options) {
+  options = typeof options === 'undefined' ? {} : options;
+  var sequelize = new Sequelize('', '', '', {
+    dialect: 'postgres',
+    logging: false
+  });
+
+  var Target = sequelize.define('Target', {
+    name: Sequelize.TEXT,
+    email: Sequelize.TEXT,
+    parameters: Sequelize.ARRAY((Sequelize.JSON)),
+  });
+
+  var User = sequelize.define('User', {
+    name: Sequelize.TEXT
+  });
+
+  var trackerOptions = {
+    userModel: User
+  };
+
+  trackerOptions = _.assign(trackerOptions, options);
+
+  Tracker(Target, sequelize, trackerOptions);
+
+  return sequelize.sync({ force: true });
+}
+
+function getUserFixture() {
+  return {
+    name: 'test_user'
+  };
+}
+
+function getTargetFixture() {
+  return {
+    name: 'test_target',
+    email: 'test@target.com',
+    parameters: [{
+      age: 25,
+      height: 159
+    }, {
+      age: 32,
+      height: 183
+    }]
+  };
+}
+
+function assertCount(model, n, opts){
+  return function(obj) {
+    return model.count(opts)
+    .then(function(count) {
+      assert.equal(count, n, "log entries")
+      return obj;
+    });
+  }
+}
+
+describe('hooks default', function() {
+  var database, target, user, targetLog, user_id;
+  beforeEach(function(done) {
+     initDB().then(function(db) {
+      database = db;
+      target = database.models.Target;
+      user = database.models.User;
+      targetLog = database.models.TargetLog
+      user.create(getUserFixture())
+      .then(function(newUser) {
+        user_id = newUser.id;
+        done();
+      });
+    })
+  });
+
+  afterEach(function() {
+    database.close();
+  });
+
+  it('onCreate: should store a record in log db', function() {
+    return target.create(getTargetFixture(), {
+      trackOptions: {
+        user_id: user_id
+      }
+    })
+    .then(assertCount(targetLog, 1));
+  });
+
+  it('onCreate/onUpdate/onDestroy: should store 3 records in log db', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(target) {
+      target.name = "foo_target";
+      return target.save({ trackOptions: { user_id: user_id } });
+    }).then(assertCount(targetLog, 2))
+    .then(function(target) {
+      return target.destroy({ trackOptions: { user_id: user_id } });
+    }).then(assertCount(targetLog, 3))
+  });
+
+  it('onUpdate: should store the correct values', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(target){
+      target.name = "foo_target";
+      target.email = "foo@target.com"
+      return target.save({ trackOptions: { user_id: user_id } });
+    }).then(assertCount(targetLog, 2))
+    .then(function() {
+      return targetLog.findAll();
+    }).then(function(logs) {
+      assert.equal(logs[0].action, "create");
+      assert.deepEqual(logs[1].changes, [{
+        value: "foo_target",
+        previousValue: "test_target",
+        field: "name"
+      }, {
+        value: "foo@target.com",
+        previousValue: "test@target.com",
+        field: "email"
+      }]);
+      assert.equal(logs[1].action, "update");
+    });
+  });
+
+  it('onCreate/onBulkUpdate: should store 2 records in log db', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      // Sequelize runs bulkUpdate in this case
+      return target.update({ name: "foo_target"}, {
+        where: { id: t.id },
+        trackOptions: { user_id: user_id }
+      });
+    }).then(assertCount(targetLog, 2))
+  });
+
+  it('onFind: should only store a record in log db if track is true', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      return target.findOne({
+        where: { id: t.id }
+      });
+    }).then(assertCount(targetLog, 1))
+    .then(function(t) {
+      return target.findOne({
+        where: { id: t.id },
+        trackOptions: { track: true, user_id: user_id }
+      });
+    }).then(assertCount(targetLog, 2))
+  });
+
+  it('onFindAll: should store a record in db', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function() {
+      return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+      .then(assertCount(targetLog, 2))
+      .then(function() {
+        return target.findAll({
+          trackOptions: { track: true, user_id: user_id }
+        });
+      }).then(assertCount(targetLog, 4))
+    })
+  });
+
+  it('onCreate: should error when trackOptions not provided', function() {
+    var promise =  target.create(getTargetFixture(), {});
+    return assert.isRejected(promise, 'user_id is required in tracker options.');
+  });
+  it('onCreate: should error when options not provided', function() {
+    var promise =  target.create(getTargetFixture());
+    return assert.isRejected(promise, 'user_id is required in tracker options.');
+  });
+
+  it('onUpdate: should error when trackOptions not provided', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      var promise = t.update({ name: 'foo_test'}, {})
+      return assert.isRejected(promise, 'user_id is required in tracker options.');
+    });
+  });
+  it('onUpdate: should error when options not provided', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      var promise = t.update({ name: 'foo_test'})
+      return assert.isRejected(promise, 'user_id is required in tracker options.');
+    });
+  });
+
+  it('onDelete: should error when trackOptions not provided', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      var promise = t.destroy({})
+      return assert.isRejected(promise, 'user_id is required in tracker options.');
+    });
+  });
+  it('onDelete: should error when options not provided', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      var promise = t.destroy()
+      return assert.isRejected(promise, 'user_id is required in tracker options.');
+    });
+  });
+
+  it('onFind: should error when track true, but trackOptions not provided', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      var promise = target.findOne({
+        where: { id: t.id },
+        trackOptions: { track: true }
+      })
+      return assert.isRejected(promise, 'user_id is required in tracker options.');
+    });
+  });
+
+  it('onFindAll: should error when trackOptions not provided', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function() {
+      var promise = target.findAll({ trackOptions: { track: true } })
+      return assert.isRejected(promise, 'user_id is required in tracker options.');
+    });
+  });
+
+  it('onDelete: should not delete the logs', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      return t.destroy({ trackOptions: { user_id: user_id } })
+    })
+    .then(assertCount(targetLog, 2))
+  });
+
+  it('onUpdate: should store record of changed json correctly when .save', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      var params = _.cloneDeep(t.get('parameters'));
+      params[0].height = 160;
+      t.set('parameters', params);
+      return t.save({ trackOptions: { user_id: user_id } })
+    })
+    .then(assertCount(targetLog, 2))
+    .then(function() {
+      return targetLog.findAll()
+      .then(function(log) {
+        var dataBefore = getTargetFixture();
+        var dataAfter = getTargetFixture();
+        dataAfter.parameters[0].height = 160;
+        var expecting = {
+          field: 'parameters',
+          value: dataAfter.parameters,
+          previousValue: dataBefore.parameters
+        };
+        assert.deepEqual(log[1].changes[0], expecting);
+      })
+    })
+  });
+
+  it('onUpdate: should store record of changed json correctly when .update', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      t.parameters[0].height = 160;
+      return target.update({
+        parameters: t.parameters
+      }, {
+        trackOptions: {
+          user_id: user_id
+        },
+        where: {
+          id: t.id
+        }
+      })
+    })
+    .then(assertCount(targetLog, 2))
+    .then(function() {
+      return targetLog.findAll()
+      .then(function(log) {
+        var dataBefore = getTargetFixture();
+        var dataAfter = getTargetFixture();
+        dataAfter.parameters[0].height = 160;
+        var expecting = {
+          field: 'parameters',
+          value: dataAfter.parameters,
+          previousValue: dataBefore.parameters
+        };
+        assert.deepEqual(log[1].changes[0], expecting);
+      })
+    })
+  });
+
+});
+
+describe('hooks with cascade', function() {
+  var database, target, user, targetLog, user_id;
+  beforeEach(function(done) {
+    var options = {
+      persistant: false
+    };
+    initDB(options).then(function(db) {
+    database = db;
+    target = database.models.Target;
+    user = database.models.User;
+    targetLog = database.models.TargetLog
+    user.create(getUserFixture())
+    .then(function(newUser) {
+      user_id = newUser.id;
+      done();
+    });
+  })
+  });
+
+  afterEach(function() {
+    database.close();
+  });
+
+  it('onDelete: should delete the logs with cascade', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      return t.destroy({ trackOptions: { user_id: user_id } })
+      .then(assertCount(targetLog, 0))
+    })
+  });
+
+});
+
+describe('read-only ', function() {
+  var database, target, user, targetLog, user_id;
+  beforeEach(function(done) {
+     initDB().then(function(db) {
+      database = db;
+      target = database.models.Target;
+      user = database.models.User;
+      targetLog = database.models.TargetLog
+      user.create(getUserFixture())
+      .then(function(newUser) {
+        user_id = newUser.id;
+        done();
+      });
+    })
+  });
+
+  afterEach(function() {
+    database.close();
+  });
+
+  it('cannot update existing log', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(log) {
+      return log.update({ name: 'bla' }, { trackOptions: { user_id: user_id } })
+      .catch((function(err) {
+        return assert.isRejected(err, Error, "Validation error");
+      }))
+    });
+  });
+
+  it('cannot delete existing log', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(log) {
+      return log.destroy({ trackOptions: { user_id: user_id } })
+      .catch((function(err) {
+        return assert.isRejected(err, Error, "Validation error");
+      }))
+    });
+  });
+});
