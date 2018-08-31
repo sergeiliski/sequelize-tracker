@@ -10,9 +10,18 @@
   "keywords": [
     "sequelize",
     "tracking",
-    "logs"
+    "logs",
+    "audit",
+    "trail",
+    "track",
+    "log"
   ],
-  "author": "Sergei Liski",
+  "author": {
+    "name": "Sergei Liski",
+    "email": "sergeiliski@gmail.com",
+    "url": "http://sergeiliski.com"
+  },
+  "homepage": "https://github.com/sergeiliski/sequelize-tracker",
   "license": "MIT",
   "dependencies": {
     "lodash": "^4.17.5"
@@ -25,7 +34,6 @@
     "nyc": "^13.0.1",
     "pg": "^7.4.3",
     "pg-hstore": "^2.3.2",
-    "sequelize": "^4.38.0",
-    "sqlite3": "^4.0.1"
+    "sequelize": "^4.38.0"
   }
 }
