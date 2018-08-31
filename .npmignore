@@ -1,0 +1,9 @@
+.test.sqlite
+node_modules
+.nyc_output
+coverage
+.DS_Store
+.gitignore
+logs
+*.log
+npm-debug.log*
