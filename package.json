@@ -1,6 +1,6 @@
 {
   "name": "sequelize-tracker",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Track your models. Who creates, deletes, views and changes data.",
   "main": "index.js",
   "scripts": {
