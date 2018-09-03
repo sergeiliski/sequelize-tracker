@@ -30,9 +30,12 @@ function initDB(options) {
 
   trackerOptions = _.assign(trackerOptions, options);
 
-  Tracker(Target, sequelize, trackerOptions);
+  var Logger = Tracker(Target, sequelize, trackerOptions);
 
-  return sequelize.sync({ force: true });
+  return {
+    initiation: sequelize.sync({ force: true }),
+    tracker: Logger
+  }
 }
 
 function getUserFixture() {
@@ -68,17 +71,18 @@ function assertCount(model, n, opts){
 describe('hooks default', function() {
   var database, target, user, targetLog, user_id;
   beforeEach(function(done) {
-     initDB().then(function(db) {
-      database = db;
-      target = database.models.Target;
-      user = database.models.User;
-      targetLog = database.models.TargetLog
-      user.create(getUserFixture())
-      .then(function(newUser) {
-        user_id = newUser.id;
-        done();
-      });
-    })
+    var testSuite = initDB();
+    testSuite.initiation.then(function(db) {
+    database = db;
+    target = database.models.Target;
+    user = database.models.User;
+    targetLog = database.models.TargetLog
+    user.create(getUserFixture())
+    .then(function(newUser) {
+      user_id = newUser.id;
+      done();
+    });
+  })
   });
 
   afterEach(function() {
@@ -307,7 +311,8 @@ describe('hooks with cascade', function() {
     var options = {
       persistant: false
     };
-    initDB(options).then(function(db) {
+    var testSuite = initDB(options);
+    testSuite.initiation.then(function(db) {
     database = db;
     target = database.models.Target;
     user = database.models.User;
@@ -338,7 +343,8 @@ describe('hooks with cascade', function() {
 describe('read-only ', function() {
   var database, target, user, targetLog, user_id;
   beforeEach(function(done) {
-     initDB().then(function(db) {
+    var testSuite = initDB();
+    testSuite.initiation.then(function(db) {
       database = db;
       target = database.models.Target;
       user = database.models.User;
@@ -376,4 +382,44 @@ describe('read-only ', function() {
       }))
     });
   });
+});
+
+describe('logged data', function() {
+  var database, target, user, targetLog, user_id, trackerObject;
+  beforeEach(function(done) {
+    var testSuite = initDB();
+    trackerObject = testSuite.tracker;
+    testSuite.initiation.then(function(db) {
+    database = db;
+    target = database.models.Target;
+    user = database.models.User;
+    targetLog = database.models.TargetLog
+    user.create(getUserFixture())
+    .then(function(newUser) {
+      user_id = newUser.id;
+      done();
+    });
+  })
+  });
+
+  afterEach(function() {
+    database.close();
+  });
+
+  it('returns track object', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      return targetLog.findAll({
+        where: {
+          target_id: t.id
+        }
+      })
+      .then(assertCount(targetLog, 1))
+      .finally(function() {
+        assert.deepEqual(trackerObject, targetLog);
+      });
+    })
+  });
+
 });

@@ -208,7 +208,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
   modelTrack.hook('beforeUpdate', readOnlyHook);
   modelTrack.hook('beforeDestroy', readOnlyHook);
 
-  return targetModel;
+  return modelTrack;
 };
 
 module.exports = Tracker;
