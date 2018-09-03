@@ -6,6 +6,7 @@ var chaiAsPromised = require("chai-as-promised");
 chai.use(chaiAsPromised);
 var assert = chai.assert;
 var eventually = assert.eventually;
+var moment = require('moment');
 
 function initDB(options) {
   options = typeof options === 'undefined' ? {} : options;
@@ -422,4 +423,18 @@ describe('logged data', function() {
     })
   });
 
+  it('timestamp is saved correctly', function() {
+    var beginning = moment().subtract(10, 'seconds');
+    var end = moment().add(10, 'seconds');
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      return targetLog.findAll()
+      .then(function(log) {
+        var timestamp = log[0].timestamp;
+        var isWithin = moment(timestamp).isAfter(beginning) && moment(timestamp).isBefore(end);
+        assert(isWithin);
+      })
+      .finally(assertCount(targetLog, 1));
+    })
+  });
 });

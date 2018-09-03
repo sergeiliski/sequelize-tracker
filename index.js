@@ -1,4 +1,5 @@
 var _ = require('lodash');
+var moment = require('moment');
 
 var excludeAttributes = function(obj, attrsToExclude){
   return _.omit(obj, attrsToExclude);
@@ -51,7 +52,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
     timestamp: {
       type: Sequelize.DATE,
       allowNull: false,
-      defaultValue: new Date(),
+      defaultValue: Sequelize.NOW,
     }
   };
 
