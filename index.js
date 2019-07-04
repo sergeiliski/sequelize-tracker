@@ -88,7 +88,9 @@ var Tracker = function(model, sequelize, trackerOptions) {
       metadata: options.trackOptions.metadata
     }
 
-    return modelTrack.create(dataValues);
+    return modelTrack.create(dataValues, {
+      transaction: options.transaction
+    });
   }
 
   var updateHook = function(obj, options) {
@@ -105,7 +107,6 @@ var Tracker = function(model, sequelize, trackerOptions) {
       }
     });
 
-
     var dataValues = {
       changes,
       target_id: obj.id,
@@ -114,7 +115,9 @@ var Tracker = function(model, sequelize, trackerOptions) {
       metadata: options.trackOptions.metadata
     }
 
-    return modelTrack.create(dataValues);
+    return modelTrack.create(dataValues, {
+      transaction: options.transaction
+    });
   }
 
   var updateBulkHook = function(options) {
@@ -146,7 +149,9 @@ var Tracker = function(model, sequelize, trackerOptions) {
           }
         });
 
-        return modelTrack.bulkCreate(dataValues);
+        return modelTrack.bulkCreate(dataValues, {
+          transaction: options.transaction
+        });
       }
     });
   }
@@ -161,7 +166,9 @@ var Tracker = function(model, sequelize, trackerOptions) {
       metadata: options.trackOptions.metadata
     }
 
-    return modelTrack.create(dataValues);
+    return modelTrack.create(dataValues, {
+      transaction: options.transaction
+    });
   }
 
   var findHook = function(obj, options) {
@@ -181,7 +188,9 @@ var Tracker = function(model, sequelize, trackerOptions) {
       };
     })
 
-    return modelTrack.bulkCreate(dataValues);
+    return modelTrack.bulkCreate(dataValues, {
+      transaction: options.transaction
+    });
   }
 
   var checkMandatoryHookOptions = function(options, optional) {
@@ -197,7 +206,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
   }
 
   var readOnlyHook = function() {
-    throw new Error("This is a read-only log. You cannot modify it.");    
+    throw new Error("This is a read-only log. You cannot modify it.");
   };
 
   targetModel.hook('afterFind', findHook);

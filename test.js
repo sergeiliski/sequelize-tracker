@@ -7,6 +7,7 @@ chai.use(chaiAsPromised);
 var assert = chai.assert;
 var eventually = assert.eventually;
 var moment = require('moment');
+var sequelize = require('sequelize');
 
 function initDB(options) {
   options = typeof options === 'undefined' ? {} : options;
@@ -34,6 +35,7 @@ function initDB(options) {
   var Logger = Tracker(Target, sequelize, trackerOptions);
 
   return {
+    sequelize,
     initiation: sequelize.sync({ force: true }),
     tracker: Logger
   }
@@ -59,7 +61,7 @@ function getTargetFixture() {
   };
 }
 
-function assertCount(model, n, opts){
+function assertCount(model, n, opts) {
   return function(obj) {
     return model.count(opts)
     .then(function(count) {
@@ -96,7 +98,8 @@ describe('hooks default', function() {
         user_id: user_id
       }
     })
-    .then(assertCount(targetLog, 1));
+    .then(assertCount(targetLog, 1))
+    .finally(assertCount(target, 1))
   });
 
   it('onCreate/onUpdate/onDestroy: should store 3 records in log db', function() {
@@ -437,4 +440,51 @@ describe('logged data', function() {
       .finally(assertCount(targetLog, 1));
     })
   });
+
+});
+
+describe('transactions', function() {
+  var database, target, user, targetLog, user_id, testSuite;
+  beforeEach(function(done) {
+    var options = {
+      persistant: false
+    };
+    testSuite = initDB(options);
+    testSuite.initiation.then(function(db) {
+    database = db;
+    target = database.models.Target;
+    user = database.models.User;
+    targetLog = database.models.TargetLog
+    user.create(getUserFixture())
+    .then(function(newUser) {
+      user_id = newUser.id;
+      done();
+    });
+  })
+  });
+
+  afterEach(function() {
+    database.close();
+  });
+
+  it('Transaction - onCreate: should wait transaction to commit', function() {
+    return testSuite.sequelize.transaction(t => {
+      return target.create(getTargetFixture(), {
+        trackOptions: {
+          user_id: user_id
+        },
+        transaction: t
+      })
+      .then(() => {
+        return target.create(getTargetFixture(), {
+          trackOptions: {
+            user_id: user_id
+          },
+          transaction: t
+        })
+      })
+    })
+    .finally(assertCount(target, 2));
+  });
+
 });
