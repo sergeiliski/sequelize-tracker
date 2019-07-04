@@ -95,7 +95,6 @@ var Tracker = function(model, sequelize, trackerOptions) {
 
   var updateHook = function(obj, options) {
     if (isDoNotTrack(options)) {
-      console.log('Im here');
       return false;
     }
     checkMandatoryHookOptions(options);
