@@ -39,12 +39,21 @@ Tracker(Target, sequelize, options);
 
 ### 3) Use it in your queries
 
-All `create`, `update` and `destroy` queries are logged. You just need to pass `trackOptions` object with `user_id` in options.
+All `create`, `update` and `destroy` queries are logged by default. You just need to pass `trackOptions` object with `user_id` in options.
 
 ```js
   model.create(data, {
     trackOptions: {
       user_id: // users id
+    }
+  })
+```
+
+`update` can be set to ignore changes by passing `track: false` in `trackOptions`.
+```js
+  model.update(data, {
+    trackOptions: {
+      track: false
     }
   })
 ```
