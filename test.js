@@ -102,6 +102,36 @@ describe('hooks default', function() {
     .finally(assertCount(target, 1))
   });
 
+  it('onUpdate: should not log the change to db', function() {
+    return target.create(getTargetFixture(), {
+      trackOptions: {
+        user_id: user_id
+      }
+    })
+    .then(function(target) {
+      target.name = "foo_target";
+      return target.save({ trackOptions: { track: false } })
+      .then(() => {
+        return targetLog.findAll()
+        .then((logs) => {
+          assert.equal(logs[0].action, "create");
+          assert.equal(logs.length, 1);
+        });
+      })
+    })
+    .finally(assertCount(target, 1))
+  });
+
+  it('onBulkUpdate: should not log the change to db', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(function(t) {
+      return target.update({ name: "foo_target"}, {
+        where: { id: t.id },
+        trackOptions: { track: false }
+      });
+    }).then(assertCount(targetLog, 1))
+  });
+
   it('onCreate/onUpdate/onDestroy: should store 3 records in log db', function() {
     return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
     .then(assertCount(targetLog, 1))

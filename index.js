@@ -94,7 +94,12 @@ var Tracker = function(model, sequelize, trackerOptions) {
   }
 
   var updateHook = function(obj, options) {
+    if (isDoNotTrack(options)) {
+      console.log('Im here');
+      return false;
+    }
     checkMandatoryHookOptions(options);
+
     var values = excludeAttributes(obj.dataValues, excludedAttributes);
     var changes = [];
     _.forOwn(values, function(value, key) {
@@ -121,6 +126,9 @@ var Tracker = function(model, sequelize, trackerOptions) {
   }
 
   var updateBulkHook = function(options) {
+    if (isDoNotTrack(options)) {
+      return false;
+    }
     checkMandatoryHookOptions(options);
 
     return targetModel.findAll({
@@ -191,6 +199,18 @@ var Tracker = function(model, sequelize, trackerOptions) {
     return modelTrack.bulkCreate(dataValues, {
       transaction: options.transaction
     });
+  }
+
+  var isDoNotTrack = function(options) {
+    if (!options || !options.trackOptions) {
+      // if no options given or options does not have trackOptions -> log
+      return false;
+    }
+    if (typeof options.trackOptions.track === 'boolean' && options.trackOptions.track === false) {
+      // if track property is typeof boolean (is not undefined) and is set to false -> dont log
+      return true;
+    }
+    return false;
   }
 
   var checkMandatoryHookOptions = function(options, optional) {
