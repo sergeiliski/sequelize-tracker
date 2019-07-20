@@ -185,6 +185,10 @@ var Tracker = function(model, sequelize, trackerOptions) {
     
     checkMandatoryHookOptions(options);
 
+    if (!obj) {
+      return false;
+    }
+
     var objects = obj instanceof Array ? obj : [obj];
     var dataValues = _.map(objects, function(o) {
       return {

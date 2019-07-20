@@ -211,6 +211,21 @@ describe('hooks default', function() {
     })
   });
 
+  it('onFindAll: should not error if record not found', function() {
+    return target.findAll({
+      trackOptions: { track: true, user_id: user_id }
+    });
+  });
+
+  it('onFindOne: should not error if record not found', function() {
+    return target.findOne({
+      where: {
+        id: 999
+      },
+      trackOptions: { track: true, user_id: user_id }
+    });
+  });
+
   it('onCreate: should error when trackOptions not provided', function() {
     var promise =  target.create(getTargetFixture(), {});
     return assert.isRejected(promise, 'user_id is required in tracker options.');
