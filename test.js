@@ -22,9 +22,17 @@ function initDB(options) {
     parameters: Sequelize.ARRAY((Sequelize.JSON)),
   });
 
+  var Relationship = sequelize.define('Relationship', {
+    target_id: Sequelize.INTEGER,
+    user_id: Sequelize.INTEGER
+  });
+
   var User = sequelize.define('User', {
     name: Sequelize.TEXT
   });
+
+  Target.belongsToMany(User, { through: Relationship });
+  User.belongsToMany(Target, { through: Relationship });
 
   var trackerOptions = {
     userModel: User
@@ -33,11 +41,13 @@ function initDB(options) {
   trackerOptions = _.assign(trackerOptions, options);
 
   var Logger = Tracker(Target, sequelize, trackerOptions);
+  var RelationshipLogger = Tracker(Relationship, sequelize, trackerOptions);
 
   return {
     sequelize,
     initiation: sequelize.sync({ force: true }),
-    tracker: Logger
+    tracker: Logger,
+    RelationshipTracker: RelationshipLogger
   }
 }
 
@@ -79,7 +89,8 @@ describe('hooks default', function() {
     database = db;
     target = database.models.Target;
     user = database.models.User;
-    targetLog = database.models.TargetLog
+    targetLog = database.models.TargetLog;
+    relationship = database.models.Relationship;
     user.create(getUserFixture())
     .then(function(newUser) {
       user_id = newUser.id;
@@ -100,6 +111,135 @@ describe('hooks default', function() {
     })
     .then(assertCount(targetLog, 1))
     .finally(assertCount(target, 1))
+  });
+
+  it('onCreate: should store a record in log db with data', function() {
+    return target.create(getTargetFixture(), {
+      trackOptions: {
+        user_id: user_id
+      }
+    })
+    .then(() => {
+      return targetLog.findAll()
+      .then((logs) => {
+        assert.deepEqual(logs[0].changes, [{
+          value: getTargetFixture().name,
+          previousValue: "",
+          field: "name"
+        }, {
+          value: getTargetFixture().email,
+          previousValue: "",
+          field: "email"
+        }, {
+          value: getTargetFixture().parameters,
+          previousValue: "",
+          field: "parameters"
+        }]);
+      });
+    });
+  });
+
+  it('onBulkCreate: should store a record in log db with data', function() {
+    return target.bulkCreate([getTargetFixture()], {
+      trackOptions: {
+        user_id: user_id
+      }
+    })
+    .then(() => {
+      return targetLog.findAll()
+      .then((logs) => {
+        assert.deepEqual(logs[0].changes, [{
+          value: getTargetFixture().name,
+          previousValue: "",
+          field: "name"
+        }, {
+          value: getTargetFixture().email,
+          previousValue: "",
+          field: "email"
+        }, {
+          value: getTargetFixture().parameters,
+          previousValue: "",
+          field: "parameters"
+        }]);
+      });
+    });
+  });
+
+  it('onDelete: should store a record in log db with data', function() {
+    return target.create(getTargetFixture(), {
+      trackOptions: {
+        user_id: user_id
+      }
+    })
+    .then((t) => {
+      return t.destroy({
+        trackOptions: {
+          user_id: user_id
+        }
+      })
+      .then(() => {
+        return targetLog.findAll({
+          where: {
+            action: 'delete'
+          }
+        })
+        .then((logs) => {
+          assert.deepEqual(logs[0].changes, [{
+            value: "",
+            previousValue: getTargetFixture().name,
+            field: "name"
+          }, {
+            value: "",
+            previousValue: getTargetFixture().email,
+            field: "email"
+          }, {
+            value: "",
+            previousValue: getTargetFixture().parameters,
+            field: "parameters"
+          }]);
+        });
+      });
+    });
+  });
+
+  it('onBulkDelete: should store a record in log db with data', function() {
+    return target.create(getTargetFixture(), {
+      trackOptions: {
+        user_id: user_id
+      }
+    })
+    .then((t) => {
+      return target.destroy({
+        where: {
+          id: [t.id]
+        },
+        trackOptions: {
+          user_id: user_id
+        }
+      })
+      .then(() => {
+        return targetLog.findAll({
+          where: {
+            action: 'delete'
+          }
+        })
+        .then((logs) => {
+          assert.deepEqual(logs[0].changes, [{
+            value: "",
+            previousValue: getTargetFixture().name,
+            field: "name"
+          }, {
+            value: "",
+            previousValue: getTargetFixture().email,
+            field: "email"
+          }, {
+            value: "",
+            previousValue: getTargetFixture().parameters,
+            field: "parameters"
+          }]);
+        });
+      });
+    });
   });
 
   it('onUpdate: should not log the change to db', function() {
@@ -219,6 +359,24 @@ describe('hooks default', function() {
 
   it('onFindOne: should not error if record not found', function() {
     return target.findOne({
+      where: {
+        id: 999
+      },
+      trackOptions: { track: true, user_id: user_id }
+    });
+  });
+
+  it('onUpdate: should not error if record not found', function() {
+    return target.update({ name: 'foo_test'}, {
+      where: {
+        id: 999
+      },
+      trackOptions: { track: true, user_id: user_id }
+    });
+  });
+
+  it('onDelete: should not error if record not found', function() {
+    return target.destroy({
       where: {
         id: 999
       },

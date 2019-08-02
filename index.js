@@ -81,7 +81,18 @@ var Tracker = function(model, sequelize, trackerOptions) {
   var createHook = function(obj, options) {
     checkMandatoryHookOptions(options);
 
+    var values = excludeAttributes(obj.dataValues, excludedAttributes);
+    var changes = [];
+    _.forOwn(values, function(value, key) {
+      changes.push({
+        value: value,
+        previousValue: '',
+        field: key
+      });
+    });
+
     var dataValues = {
+      changes,
       target_id: obj.id,
       action: 'create',
       user_id: options.trackOptions.user_id,
@@ -89,6 +100,36 @@ var Tracker = function(model, sequelize, trackerOptions) {
     }
 
     return modelTrack.create(dataValues, {
+      transaction: options.transaction
+    });
+  }
+
+  var createBulkHook = function(obj, options) {
+    if (isDoNotTrack(options)) {
+      return false;
+    }
+    checkMandatoryHookOptions(options);
+
+    var dataValues = _.map(obj, function(o) {
+      var values = excludeAttributes(o.dataValues, excludedAttributes);
+      var changes = [];
+      _.forOwn(values, function(value, key) {
+        changes.push({
+          value: value,
+          previousValue: '',
+          field: key
+        });
+      });
+      return {
+        changes,
+        target_id: o.id,
+        action: 'create',
+        user_id: options.trackOptions.user_id,
+        metadata: options.trackOptions.metadata
+      };
+    });
+
+    return modelTrack.bulkCreate(dataValues, {
       transaction: options.transaction
     });
   }
@@ -134,7 +175,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
         where: options.where
       })
     .then(function(data) {
-      if(data) {
+      if (data) {
         var dataValues = _.map(data, function(obj) {
           var values = excludeAttributes(obj.dataValues, excludedAttributes);
           changes = [];
@@ -166,7 +207,18 @@ var Tracker = function(model, sequelize, trackerOptions) {
   var deleteHook = function(obj, options) {
     checkMandatoryHookOptions(options);
 
+    var values = excludeAttributes(obj.dataValues, excludedAttributes);
+    var changes = [];
+    _.forOwn(values, function(value, key) {
+      changes.push({
+        value: '',
+        previousValue: value,
+        field: key
+      })
+    });
+
     var dataValues = {
+      changes,
       target_id: obj.id,
       action: 'delete',
       user_id: options.trackOptions.user_id,
@@ -177,6 +229,41 @@ var Tracker = function(model, sequelize, trackerOptions) {
       transaction: options.transaction
     });
   }
+
+  var deleteBulkHook = function(options) {
+    checkMandatoryHookOptions(options);
+
+    return targetModel.findAll({
+      where: options.where
+    })
+    .then(function(data) {
+      if (data) {
+        var dataValues = _.map(data, function(obj) {
+          var values = excludeAttributes(obj.dataValues, excludedAttributes);
+          changes = [];
+          _.forOwn(values, function(value, key) {
+            changes.push({
+              value: '',
+              previousValue: value,
+              field: key
+            })
+          });
+          return {
+            changes,
+            target_id: obj.id,
+            action: 'delete',
+            user_id: options.trackOptions.user_id,
+            metadata: options.trackOptions.metadata
+          }
+        });
+
+        return modelTrack.bulkCreate(dataValues, {
+          transaction: options.transaction
+        });
+      }
+    });
+  }
+
 
   var findHook = function(obj, options) {
     if (!options || !options.trackOptions || !options.trackOptions.track) {
@@ -234,9 +321,11 @@ var Tracker = function(model, sequelize, trackerOptions) {
 
   targetModel.hook('afterFind', findHook);
   targetModel.hook('afterCreate', createHook);
+  targetModel.hook('afterBulkCreate', createBulkHook);
   targetModel.hook('beforeUpdate', updateHook);
   targetModel.hook('beforeBulkUpdate', updateBulkHook);
   targetModel.hook('beforeDestroy', deleteHook);
+  targetModel.hook('beforeBulkDestroy', deleteBulkHook);
 
   modelTrack.hook('beforeUpdate', readOnlyHook);
   modelTrack.hook('beforeDestroy', readOnlyHook);
