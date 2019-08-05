@@ -26,7 +26,8 @@ var Tracker = function(model, sequelize, trackerOptions) {
   }
 
   var trackerDefaultOptions = {
-    persistant: true
+    persistant: true,
+    changes: ['update']
   };
   trackerOptions = _.extend({}, trackerDefaultOptions, trackerOptions);
   var trackedModel = _.isString(trackerOptions.userModel) ? sequelize.model(trackerOptions.userModel) : trackerOptions.userModel;
@@ -99,6 +100,10 @@ var Tracker = function(model, sequelize, trackerOptions) {
       metadata: options.trackOptions.metadata
     }
 
+    if (trackerOptions.changes.indexOf('create') < 0) {
+      delete dataValues.changes;
+    }
+
     return modelTrack.create(dataValues, {
       transaction: options.transaction
     });
@@ -128,6 +133,13 @@ var Tracker = function(model, sequelize, trackerOptions) {
         metadata: options.trackOptions.metadata
       };
     });
+
+    // Refactor later (done: 5 August 2019)
+    if (trackerOptions.changes.indexOf('create') < 0) {
+      _.forEach(dataValues, function(value, i) {
+        delete dataValues[i].changes;
+      });
+    }
 
     return modelTrack.bulkCreate(dataValues, {
       transaction: options.transaction
@@ -225,6 +237,10 @@ var Tracker = function(model, sequelize, trackerOptions) {
       metadata: options.trackOptions.metadata
     }
 
+    if (trackerOptions.changes.indexOf('delete') < 0) {
+      delete dataValues.changes;
+    }
+
     return modelTrack.create(dataValues, {
       transaction: options.transaction
     });
@@ -256,6 +272,13 @@ var Tracker = function(model, sequelize, trackerOptions) {
             metadata: options.trackOptions.metadata
           }
         });
+
+        // Refactor later (done: 5 August 2019)
+        if (trackerOptions.changes.indexOf('delete') < 0) {
+          _.forEach(dataValues, function(value, i) {
+            delete dataValues[i].changes;
+          });
+        }
 
         return modelTrack.bulkCreate(dataValues, {
           transaction: options.transaction

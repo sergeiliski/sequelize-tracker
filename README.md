@@ -124,9 +124,12 @@ whereas the options are listed here (with default value).
 ```js
 {
   // By default it keeps all logs after tracked item is deleted
-  persistant: true
+  persistant: true,
+  changes: ['update']
 }
 ```
+
+Only `['update', 'create', 'delete']` are supported. `update` cannot be excluded.
 
 License
 -------
