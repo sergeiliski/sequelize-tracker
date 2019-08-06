@@ -19,6 +19,8 @@ function initDB(options) {
   var Target = sequelize.define('Target', {
     name: Sequelize.TEXT,
     email: Sequelize.TEXT,
+    active: Sequelize.BOOLEAN,
+    sms: Sequelize.BOOLEAN,
     parameters: Sequelize.ARRAY((Sequelize.JSON)),
   });
 
@@ -74,6 +76,8 @@ function getTargetFixture() {
   return {
     name: 'test_target',
     email: 'test@target.com',
+    active: true,
+    sms: false,
     parameters: [{
       age: 25,
       height: 159
@@ -602,6 +606,41 @@ describe('hooks default', function() {
           previousValue: dataBefore.parameters
         };
         assert.deepEqual(log[1].changes[0], expecting);
+      })
+    })
+  });
+
+  it('onUpdate: should store record of checkbox on/off correctly', function() {
+    return target.create(getTargetFixture(), { trackOptions: { user_id: user_id } })
+    .then(assertCount(targetLog, 1))
+    .then(function(t) {
+      return target.update({
+        active: false,
+        sms: true
+      }, {
+        trackOptions: {
+          user_id: user_id
+        },
+        where: {
+          id: t.id
+        }
+      })
+    })
+    .then(assertCount(targetLog, 2))
+    .then(function() {
+      return targetLog.findAll()
+      .then(function(log) {
+        assert.equal(log[1].changes.length, 2);
+        assert.deepEqual(log[1].changes[0], {
+          field: 'active',
+          value: false,
+          previousValue: true
+        });
+        assert.deepEqual(log[1].changes[1], {
+          field: 'sms',
+          value: true,
+          previousValue: false
+        });
       })
     })
   });

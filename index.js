@@ -151,11 +151,13 @@ var Tracker = function(model, sequelize, trackerOptions) {
       return false;
     }
     checkMandatoryHookOptions(options);
-
     var values = excludeAttributes(obj.dataValues, excludedAttributes);
     var changes = [];
     _.forOwn(values, function(value, key) {
-      if (!!obj.previous(key) && !_.isEqual(obj.previous(key), value)) {
+      if (
+          (typeof obj.previous(key) === 'boolean' || !!obj.previous(key)) &&
+          !_.isEqual(obj.previous(key), value)
+        ) {
         changes.push({
           value: value,
           previousValue: obj.previous(key),
@@ -192,7 +194,10 @@ var Tracker = function(model, sequelize, trackerOptions) {
           var values = excludeAttributes(obj.dataValues, excludedAttributes);
           changes = [];
           _.forOwn(values, function(value, key) {
-            if (!!options.attributes[key] && !_.isEqual(options.attributes[key], value)) {
+            if (
+                (typeof options.attributes[key] === 'boolean' || !!options.attributes[key]) &&
+                !_.isEqual(options.attributes[key], value)
+              ) {
               changes.push({
                 value: options.attributes[key],
                 previousValue: value,
