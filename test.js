@@ -30,6 +30,12 @@ function initDB(options) {
     parameters: Sequelize.ARRAY((Sequelize.JSON)),
   });
 
+  var Target3 = sequelize.define('Target3', {
+    name: Sequelize.TEXT,
+    email: Sequelize.TEXT,
+    parameters: Sequelize.ARRAY((Sequelize.JSON)),
+  });
+
   var Relationship = sequelize.define('Relationship', {
     target_id: Sequelize.INTEGER,
     user_id: Sequelize.INTEGER
@@ -49,20 +55,27 @@ function initDB(options) {
   var trackerOptionsCustom = {
     userModel: User,
     changes: ['create', 'delete', 'update']
-  }
+  };
+
+  var trackerNullOptions = {
+    userModel: User,
+    allowNull: true
+  };
 
   trackerOptions = _.assign(trackerOptions, options);
 
   var Logger = Tracker(Target, sequelize, trackerOptions);
   var RelationshipLogger = Tracker(Relationship, sequelize, trackerOptions);
   var Logger2 = Tracker(Target2, sequelize, trackerOptionsCustom);
+  var Logger3 = Tracker(Target3, sequelize, trackerNullOptions);
 
   return {
     sequelize,
     initiation: sequelize.sync({ force: true }),
     tracker: Logger,
     RelationshipTracker: RelationshipLogger,
-    tracker2: Logger2
+    tracker2: Logger2,
+    tracker3: Logger3
   }
 }
 
@@ -99,16 +112,18 @@ function assertCount(model, n, opts) {
 }
 
 describe('hooks default', function() {
-  var database, target, user, targetLog, user_id, target2;
+  var database, target, user, targetLog, user_id, target2, target3;
   beforeEach(function(done) {
     var testSuite = initDB();
     testSuite.initiation.then(function(db) {
     database = db;
     target = database.models.Target;
     target2 = database.models.Target2;
+    target3 = database.models.Target3;
     user = database.models.User;
     targetLog = database.models.TargetLog;
     target2Log = database.models.Target2Log;
+    target3Log = database.models.Target3Log;
     relationship = database.models.Relationship;
     user.create(getUserFixture())
     .then(function(newUser) {
@@ -130,6 +145,34 @@ describe('hooks default', function() {
     })
     .then(assertCount(targetLog, 1))
     .finally(assertCount(target, 1))
+  });
+
+  it('onCreate: should store a record in log db with user_id null', function() {
+    return target3.create(getTargetFixture(), {
+      trackOptions: {
+        track: false,
+        metadata: {},
+        user_id: null
+      }
+    })
+    .then(assertCount(target3Log, 1))
+    .finally(assertCount(target3, 1))
+  });
+
+  it('onFindOrCreate: should store a record in log db with user_id null', function() {
+    return target3.findOrCreate({
+      where: {
+        id: 1
+      },
+      defaults: getTargetFixture(),
+      trackOptions: {
+        track: false,
+        metadata: {},
+        user_id: null
+      }
+    })
+    .then(assertCount(target3Log, 1))
+    .finally(assertCount(target3, 1))
   });
 
   it('onCreate: should store a record in log db with data', function() {

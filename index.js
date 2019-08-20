@@ -27,7 +27,8 @@ var Tracker = function(model, sequelize, trackerOptions) {
 
   var trackerDefaultOptions = {
     persistant: true,
-    changes: ['update']
+    changes: ['update'],
+    allowNull: false
   };
   trackerOptions = _.extend({}, trackerDefaultOptions, trackerOptions);
   var trackedModel = _.isString(trackerOptions.userModel) ? sequelize.model(trackerOptions.userModel) : trackerOptions.userModel;
@@ -338,8 +339,10 @@ var Tracker = function(model, sequelize, trackerOptions) {
       }
     }
 
-    if (!options || !options.trackOptions || !options.trackOptions.user_id) {
-      throw new Error('user_id is required in tracker options.');
+    if (typeof trackerOptions.allowNull === 'boolean' && trackerOptions.allowNull === false) {
+      if (!options || !options.trackOptions || !options.trackOptions.user_id) {
+        throw new Error('user_id is required in tracker options.');
+      }
     }
   }
 
