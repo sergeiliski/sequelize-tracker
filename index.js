@@ -35,10 +35,15 @@ var Tracker = function(model, sequelize, trackerOptions) {
   var targetModel = _.isString(model) ? sequelize.model(model) : model;
   var Sequelize = sequelize.Sequelize;
   var trackName = targetModel.name + 'Log';
+  var changesDataType = Sequelize.ARRAY((Sequelize.JSON));
+
+  if (trackerOptions.encryption &&  trackerOptions.encrypt) {
+    changesDataType = Sequelize.TEXT;
+  }
 
   var trackAttributes = {
     changes: {
-      type: Sequelize.ARRAY((Sequelize.JSON)),
+      type: changesDataType,
       allowNull: true,
       defaultValue: null,
     },
@@ -80,6 +85,17 @@ var Tracker = function(model, sequelize, trackerOptions) {
     foreignKey: 'user_id'
   }, modelOptions));
 
+  var preSave = function(changes) {
+    if (trackerOptions.encryption &&  trackerOptions.encrypt) {
+      return sequelize.fn(
+        trackerOptions.encryption.pg_encrypt,
+        changes,
+        trackerOptions.encryption.secret
+      )
+    }
+    return changes;
+  }
+
   var createHook = function(obj, options) {
     checkMandatoryHookOptions(options);
 
@@ -94,7 +110,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
     });
 
     var dataValues = {
-      changes,
+      changes: preSave(changes),
       target_id: obj.id,
       action: 'create',
       user_id: options.trackOptions.user_id,
@@ -127,7 +143,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
         });
       });
       return {
-        changes,
+        changes: preSave(changes),
         target_id: o.id,
         action: 'create',
         user_id: options.trackOptions.user_id,
@@ -154,29 +170,63 @@ var Tracker = function(model, sequelize, trackerOptions) {
     checkMandatoryHookOptions(options);
     var values = excludeAttributes(obj.dataValues, excludedAttributes);
     var changes = [];
-    _.forOwn(values, function(value, key) {
-      if (
-          (typeof obj.previous(key) === 'boolean' || !!obj.previous(key)) &&
-          !_.isEqual(obj.previous(key), value)
-        ) {
-        changes.push({
-          value: value,
-          previousValue: obj.previous(key),
-          field: key
-        });
-      }
-    });
-
-    var dataValues = {
-      changes,
-      target_id: obj.id,
-      action: 'update',
-      user_id: options.trackOptions.user_id,
-      metadata: options.trackOptions.metadata
+    var hasEncryption = trackerOptions.encryption && trackerOptions.encryption.fields;
+    var findOptions = {};
+    findOptions.where = { id: obj.id };
+    if (hasEncryption) {
+      var fields = trackerOptions.encryption.fields;
+      const rawAttributes = Object.keys(targetModel['rawAttributes']);
+      const attributes = rawAttributes.map(function(attr) {
+        if (fields.indexOf(attr) > -1) {
+          return [
+            sequelize.fn(
+              trackerOptions.encryption.pg_decrypt,
+              sequelize.cast(
+                sequelize.col(`${trackerOptions.encryption.modelName}.${attr}`),
+                'bytea'
+              ),
+              trackerOptions.encryption.secret
+            ),
+            attr
+          ]
+        }
+        return attr;
+      });
+      findOptions.attributes = attributes;
     }
+    return targetModel.findOne(findOptions)
+    .then(function(data) {
+      _.forOwn(values, function(value, key) {
+        var newValue = value;
+        if (hasEncryption) {
+          var fields = trackerOptions.encryption.fields;
+          if (fields.indexOf(key) > -1 && value) {
+            newValue = value.args[0];
+          }
+        }
+        if (
+            (typeof data[key] === 'boolean' || !!data[key]) &&
+            !_.isEqual(data[key], newValue)
+          ) {
+          changes.push({
+            value: newValue,
+            previousValue: data[key],
+            field: key
+          });
+        }
+      });
+  
+      var dataValues = {
+        changes: preSave(changes),
+        target_id: obj.id,
+        action: 'update',
+        user_id: options.trackOptions.user_id,
+        metadata: options.trackOptions.metadata
+      }
 
-    return modelTrack.create(dataValues, {
-      transaction: options.transaction
+      return modelTrack.create(dataValues, {
+        transaction: options.transaction
+      });
     });
   }
 
@@ -185,29 +235,58 @@ var Tracker = function(model, sequelize, trackerOptions) {
       return false;
     }
     checkMandatoryHookOptions(options);
-
-    return targetModel.findAll({
-        where: options.where
-      })
+    var findOptions = {
+      where: options.where
+    };
+    var hasEncryption = trackerOptions.encryption && trackerOptions.encryption.fields;
+    if (hasEncryption) {
+      var fields = trackerOptions.encryption.fields;
+      const rawAttributes = Object.keys(targetModel['rawAttributes']);
+      const attributes = rawAttributes.map(function(attr) {
+        if (fields.indexOf(attr) > -1) {
+          return [
+            sequelize.fn(
+              trackerOptions.encryption.pg_decrypt,
+              sequelize.cast(
+                sequelize.col(`${trackerOptions.encryption.modelName}.${attr}`),
+                'bytea'
+              ),
+              trackerOptions.encryption.secret
+            ),
+            attr
+          ]
+        }
+        return attr;
+      });
+      findOptions.attributes = attributes;
+    }
+    return targetModel.findAll(findOptions)
     .then(function(data) {
       if (data) {
         var dataValues = _.map(data, function(obj) {
           var values = excludeAttributes(obj.dataValues, excludedAttributes);
           changes = [];
           _.forOwn(values, function(value, key) {
-            if (
-                (typeof options.attributes[key] === 'boolean' || !!options.attributes[key]) &&
-                !_.isEqual(options.attributes[key], value)
-              ) {
+            var conditional = (typeof options.attributes[key] === 'boolean' || !!options.attributes[key]) &&
+              !_.isEqual(options.attributes[key], value);
+            var newValue = options.attributes[key];
+            if (hasEncryption) {
+              if (fields.indexOf(key) > -1 && options.attributes[key]) {
+                newValue = options.attributes[key].args[0];
+                conditional = (typeof newValue === 'boolean' || !!newValue) &&
+                  !_.isEqual(newValue, value);
+              }
+            }
+            if (conditional) {
               changes.push({
-                value: options.attributes[key],
+                value: newValue,
                 previousValue: value,
                 field: key
               })
             }
           });
           return {
-            changes,
+            changes: preSave(changes),
             target_id: obj.id,
             action: 'update',
             user_id: options.trackOptions.user_id,
@@ -236,7 +315,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
     });
 
     var dataValues = {
-      changes,
+      changes: preSave(changes),
       target_id: obj.id,
       action: 'delete',
       user_id: options.trackOptions.user_id,
@@ -271,7 +350,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
             })
           });
           return {
-            changes,
+            changes: preSave(changes),
             target_id: obj.id,
             action: 'delete',
             user_id: options.trackOptions.user_id,
