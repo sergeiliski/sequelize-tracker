@@ -89,7 +89,7 @@ var Tracker = function(model, sequelize, trackerOptions) {
     if (trackerOptions.encryption &&  trackerOptions.encrypt) {
       return sequelize.fn(
         trackerOptions.encryption.pg_encrypt,
-        changes,
+        JSON.stringify(changes),
         trackerOptions.encryption.secret
       )
     }
