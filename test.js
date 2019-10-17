@@ -150,7 +150,7 @@ describe('hooks default', function() {
   it('onCreate: should store a record in log db with user_id null', function() {
     return target3.create(getTargetFixture(), {
       trackOptions: {
-        track: false,
+        track: true,
         metadata: {},
         user_id: null
       }
@@ -159,7 +159,46 @@ describe('hooks default', function() {
     .finally(assertCount(target3, 1))
   });
 
+  it('onCreate: should store a record in log db with no track defined', function() {
+    return target3.create(getTargetFixture(), {
+      trackOptions: {
+        metadata: {},
+        user_id: null
+      }
+    })
+    .then(assertCount(target3Log, 1))
+    .finally(assertCount(target3, 1))
+  });
+
+  it('onCreate: should not store a record in log db with track false', function() {
+    return target3.create(getTargetFixture(), {
+      trackOptions: {
+        track: false,
+        metadata: {},
+        user_id: null
+      }
+    })
+    .then(assertCount(target3Log, 0))
+    .finally(assertCount(target3, 1))
+  });
+
   it('onFindOrCreate: should store a record in log db with user_id null', function() {
+    return target3.findOrCreate({
+      where: {
+        id: 1
+      },
+      defaults: getTargetFixture(),
+      trackOptions: {
+        track: true,
+        metadata: {},
+        user_id: null
+      }
+    })
+    .then(assertCount(target3Log, 1))
+    .finally(assertCount(target3, 1))
+  });
+
+  it('onFindOrCreate: should not store a record in log db with track false', function() {
     return target3.findOrCreate({
       where: {
         id: 1
@@ -171,7 +210,7 @@ describe('hooks default', function() {
         user_id: null
       }
     })
-    .then(assertCount(target3Log, 1))
+    .then(assertCount(target3Log, 0))
     .finally(assertCount(target3, 1))
   });
 
