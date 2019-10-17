@@ -97,6 +97,10 @@ var Tracker = function(model, sequelize, trackerOptions) {
   }
 
   var createHook = function(obj, options) {
+    if (isDoNotTrack(options)) {
+      return false;
+    }
+
     checkMandatoryHookOptions(options);
 
     var values = excludeAttributes(obj.dataValues, excludedAttributes);
